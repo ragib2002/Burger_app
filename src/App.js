@@ -1,26 +1,87 @@
-import React from 'react';
-import logo from './logo.svg';
-import './App.css';
+import React, { Component } from "react";
+import "./App.css";
+import Layout from "./Layout";
+import BurgerBuilder from "./BurgerBuilder";
+import { Route, Switch, Redirect } from "react-router-dom";
+import Logout from "./Logout";
+import { connect } from "react-redux";
+import * as actionTypes from "./actions/Auth";
+import asyncComponent from "./asyncComponent";
 
-function App() {
-  return (
-    <div className="App">
-      <header className="App-header">
-        <img src={logo} className="App-logo" alt="logo" />
-        <p>
-          Edit <code>src/App.js</code> and save to reload.
-        </p>
-        <a
-          className="App-link"
-          href="https://reactjs.org"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Learn React
-        </a>
-      </header>
-    </div>
-  );
+const asyncCheckout = asyncComponent(() => {
+    return import("./Checkout");
+});
+
+const asyncOrders = asyncComponent(() => {
+    return import("./Orders");
+});
+
+const asyncAuth = asyncComponent(() => {
+    return import("./Auth");
+});
+
+class App extends Component {
+    componentDidMount() {
+        const token = localStorage.getItem("token");
+        if (token) {
+            const userId = localStorage.getItem("userId");
+            const expirationDate = new Date(
+                localStorage.getItem("expirationDate")
+            );
+            if (new Date() < expirationDate) {
+                this.props.onTryAutoSingup(token, userId);
+                setTimeout(() => {
+                    this.props.onlogout();
+                }, expirationDate.getTime() - new Date().getTime());
+            } else {
+                localStorage.removeItem("token");
+                localStorage.removeItem("userId");
+                localStorage.removeItem("expirationDate");
+            }
+        }
+    }
+
+    render() {
+        let routes = (
+            <Switch>
+                <Route path="/auth" component={asyncAuth} />
+                <Route path="/" exact component={BurgerBuilder} />
+                <Redirect to="/" />
+            </Switch>
+        );
+
+        if (this.props.isAuth) {
+            routes = (
+                <Switch>
+                    <Route path="/checkout" component={asyncCheckout} />
+                    <Route path="/auth" component={asyncAuth} />
+                    <Route path="/logout" component={Logout} />
+                    <Route path="/orders" component={asyncOrders} />
+                    <Route path="/" exact component={BurgerBuilder} />
+                    <Redirect to="/" />
+                </Switch>
+            );
+        }
+        return (
+            <div>
+                <Layout>{routes}</Layout>
+            </div>
+        );
+    }
 }
 
-export default App;
+const mapStateToProps = (state) => {
+    return {
+        isAuth: state.auth.token !== null,
+    };
+};
+
+const mapDispatchToProps = (dispatch) => {
+    return {
+        onTryAutoSingup: (token, userId) =>
+            dispatch(actionTypes.authSuccess(token, userId)),
+        onlogout: () => dispatch(actionTypes.authLogout()),
+    };
+};
+
+export default connect(mapStateToProps, mapDispatchToProps)(App);
